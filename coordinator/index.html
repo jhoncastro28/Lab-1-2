@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Coordinador</title>
+  <script src="/socket.io/socket.io.js"></script>
+</head>
+<body>
+  <h1>Coordinador</h1>
+  <button onclick="syncTime()">Sincronizar</button>
+  
+  <h2>Clientes Conectados</h2>
+  <ul id="clients"></ul>
+
+  <h2>Logs</h2>
+  <ul id="logs"></ul>
+
+  <script>
+    const socket = io();
+
+    // Actualizar lista de clientes
+    socket.on('updateClients', (clients) => {
+      const clientsList = document.getElementById('clients');
+      clientsList.innerHTML = '';
+      for (const id in clients) {
+        const li = document.createElement('li');
+        li.textContent = `Cliente ${id} - Offset: ${clients[id].offset}`;
+        clientsList.appendChild(li);
+      }
+    });
+
+    // Actualizar logs
+    socket.on('updateLogs', (logs) => {
+      const logsList = document.getElementById('logs');
+      logsList.innerHTML = '';
+      logs.forEach(log => {
+        const li = document.createElement('li');
+        li.textContent = log;
+        logsList.appendChild(li);
+      });
+    });
+
+    // Ejecutar sincronización
+    function syncTime() {
+      fetch('/sync');
+    }
+  </script>
+</body>
+</html>

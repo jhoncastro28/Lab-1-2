@@ -1,17 +1,24 @@
-const io = require('socket.io-client');
-const socket = io('http://localhost:3000'); // Conectar al coordinador
+const express = require('express');
+const http = require('http');
+const socketIo = require('socket.io-client');
 
-let logicalClock = Date.now(); // Reloj lógico inicial
-let offset = Math.floor(Math.random() * 1000) - 500; // Desfase aleatorio (positivo o negativo)
+const app = express();
+const port = 4000;
+const socket = socketIo('http://localhost:3000'); // Conectar al coordinador
 
-// Función para incrementar el reloj lógico con desfase
+let logicalClock = Date.now();
+let offset = Math.floor(Math.random() * 1000) - 500;
+
+app.use(express.static('.'));
+
+// Incrementa el reloj lógico y envía el tiempo al coordinador
 function updateLogicalClock() {
-  logicalClock += 1000 + offset; // Incrementar cada segundo con desfase
+  logicalClock += 1000 + offset;
   socket.emit('updateTime', { offset });
   setTimeout(updateLogicalClock, 1000);
 }
 
-// Actualizar el reloj con el ajuste recibido
+// Escuchar ajustes del coordinador
 socket.on('adjustTime', (adjustment) => {
   offset += adjustment;
   console.log(`Reloj ajustado por: ${adjustment} ms, nuevo offset: ${offset}`);
@@ -19,3 +26,7 @@ socket.on('adjustTime', (adjustment) => {
 
 // Iniciar el reloj lógico
 updateLogicalClock();
+
+app.listen(port, () => {
+  console.log(`Cliente ejecutándose en el puerto ${port}`);
+});

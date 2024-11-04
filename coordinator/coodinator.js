@@ -1,37 +1,34 @@
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
-const axios = require('axios'); // Para obtener la hora de la API
+const axios = require('axios');
+const Docker = require('dockerode');
 
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
+const docker = new Docker(); // Inicializa Docker para crear contenedores
 
-let clients = {}; // Guardará los clientes conectados y sus tiempos de desfase
-let logs = []; // Almacenará los eventos del sistema
+let clients = {};
+let logs = [];
 
-app.use(express.static('public'));
+app.use(express.static('.'));
 
-// Conexión con clientes
 io.on('connection', (socket) => {
   console.log(`Nuevo cliente conectado: ${socket.id}`);
   
-  // Guardar cliente
   clients[socket.id] = { id: socket.id, offset: 0 };
   logs.push(`Cliente conectado: ${socket.id}`);
   
-  // Enviar lista de clientes y logs
   io.emit('updateClients', clients);
   io.emit('updateLogs', logs);
 
-  // Escuchar mensajes de clientes para actualización de tiempos
   socket.on('updateTime', (data) => {
     clients[socket.id].offset = data.offset;
     logs.push(`Cliente ${socket.id} envió su tiempo con offset: ${data.offset}`);
     io.emit('updateLogs', logs);
   });
 
-  // Desconexión de cliente
   socket.on('disconnect', () => {
     logs.push(`Cliente desconectado: ${socket.id}`);
     delete clients[socket.id];
@@ -40,13 +37,10 @@ io.on('connection', (socket) => {
   });
 });
 
-// Método para ejecutar el Algoritmo de Berkeley
 async function syncTime() {
   try {
     const { data } = await axios.get('https://worldtimeapi.org/api/timezone/Etc/UTC');
     const externalTime = new Date(data.utc_datetime).getTime();
-
-    // Solicitar la hora de cada cliente
     let offsets = [];
     for (const clientId in clients) {
       offsets.push(clients[clientId].offset);
@@ -69,6 +63,25 @@ async function syncTime() {
 app.get('/sync', (req, res) => {
   syncTime();
   res.send('Sincronización ejecutada');
+});
+
+app.get('/create-client', async (req, res) => {
+  try {
+    const container = await docker.createContainer({
+      Image: 'cliente-berkeley', // Imagen Docker del cliente
+      ExposedPorts: { '4000/tcp': {} },
+      HostConfig: {
+        PortBindings: { '4000/tcp': [{ HostPort: '' }] } // Docker asigna un puerto dinámico
+      }
+    });
+    await container.start();
+    logs.push(`Nueva instancia de cliente creada: ${container.id}`);
+    io.emit('updateLogs', logs);
+    res.send('Cliente creado');
+  } catch (error) {
+    console.error('Error al crear el cliente:', error);
+    res.status(500).send('Error al crear el cliente');
+  }
 });
 
 server.listen(3000, () => {

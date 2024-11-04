@@ -1,0 +1,17 @@
+# Usa una imagen base de Node.js
+FROM node:16
+
+# Crea el directorio de la aplicación
+WORKDIR /usr/src/app
+
+# Copia los archivos de la aplicación
+COPY . .
+
+# Instala las dependencias
+RUN npm install
+
+# Expone el puerto 4000 para el cliente
+EXPOSE 4000
+
+# Comando para ejecutar el cliente
+CMD [ "node", "client.js" ]
