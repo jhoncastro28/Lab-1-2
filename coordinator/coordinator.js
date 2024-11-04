@@ -12,7 +12,7 @@ const docker = new Docker(); // Inicializa Docker para crear contenedores
 let clients = {};
 let logs = [];
 
-app.use(express.static('.'));
+app.use(express.static('public'));
 
 io.on('connection', (socket) => {
   console.log(`Nuevo cliente conectado: ${socket.id}`);
