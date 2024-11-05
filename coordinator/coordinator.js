@@ -16,21 +16,21 @@ app.use(express.static('public'));
 
 io.on('connection', (socket) => {
   console.log(`Nuevo cliente conectado: ${socket.id}`);
-  
+
   clients[socket.id] = { id: socket.id, offset: 0 };
-  logs.push(`Cliente conectado: ${socket.id}`);
-  
+  logEvent(`Cliente conectado: ${socket.id}`);
+
   io.emit('updateClients', clients);
   io.emit('updateLogs', logs);
 
   socket.on('updateTime', (data) => {
     clients[socket.id].offset = data.offset;
-    logs.push(`Cliente ${socket.id} envió su tiempo con offset: ${data.offset}`);
+    logEvent(`Cliente ${socket.id} envió su tiempo con offset: ${data.offset}`);
     io.emit('updateLogs', logs);
   });
 
   socket.on('disconnect', () => {
-    logs.push(`Cliente desconectado: ${socket.id}`);
+    logEvent(`Cliente desconectado: ${socket.id}`);
     delete clients[socket.id];
     io.emit('updateClients', clients);
     io.emit('updateLogs', logs);
@@ -39,24 +39,23 @@ io.on('connection', (socket) => {
 
 async function syncTime() {
   try {
-    const { data } = await axios.get('https://worldtimeapi.org/api/timezone/Etc/UTC');
-    const externalTime = new Date(data.utc_datetime).getTime();
+    const { data } = await axios.get(process.env.TIME_API_URL); // Asegúrate de tener TIME_API_URL en tu .env
+    const externalTime = new Date(data.datetime).getTime();
+
     let offsets = [];
     for (const clientId in clients) {
       offsets.push(clients[clientId].offset);
     }
-    
-    const averageOffset = offsets.reduce((acc, cur) => acc + cur, 0) / offsets.length;
+
+    const averageOffset = offsets.reduce((acc, cur) => acc + cur, externalTime) / (offsets.length + 1);
 
     for (const clientId in clients) {
       const adjustment = averageOffset - clients[clientId].offset;
       io.to(clientId).emit('adjustTime', adjustment);
-      logs.push(`Ajuste enviado al cliente ${clientId}: ${adjustment}`);
+      logEvent(`Ajuste enviado al cliente ${clientId}: ${adjustment}`);
     }
-
-    io.emit('updateLogs', logs);
   } catch (error) {
-    console.error('Error al obtener la hora externa:', error);
+    logEvent(`Error al obtener la hora externa: ${error.message}`);
   }
 }
 
@@ -68,21 +67,30 @@ app.get('/sync', (req, res) => {
 app.get('/create-client', async (req, res) => {
   try {
     const container = await docker.createContainer({
-      Image: 'cliente-berkeley', // Imagen Docker del cliente
+      Image: 'cliente-berkeley',
       ExposedPorts: { '4000/tcp': {} },
       HostConfig: {
-        PortBindings: { '4000/tcp': [{ HostPort: '' }] } // Docker asigna un puerto dinámico
+        PortBindings: { '4000/tcp': [{ HostPort: '' }] } // Asignación de puerto dinámica
       }
     });
     await container.start();
-    logs.push(`Nueva instancia de cliente creada: ${container.id}`);
-    io.emit('updateLogs', logs);
-    res.send('Cliente creado');
+
+    logEvent(`Nueva instancia de cliente creada: ${container.id}`);
+    io.emit('updateLogs', logs); // Actualización en tiempo real
+    res.send(`Cliente creado con ID: ${container.id}`);
   } catch (error) {
     console.error('Error al crear el cliente:', error);
+    logEvent(`Error al crear el cliente: ${error.message}`);
+    io.emit('updateLogs', logs);
     res.status(500).send('Error al crear el cliente');
   }
 });
+
+function logEvent(message) {
+  const timestamp = new Date().toLocaleTimeString();
+  logs.push(`[${timestamp}] ${message}`);
+  io.emit('updateLogs', logs);
+}
 
 server.listen(3000, () => {
   console.log('Coordinador ejecutándose en el puerto 3000');
