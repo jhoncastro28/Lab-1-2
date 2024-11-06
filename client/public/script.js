@@ -1,31 +1,31 @@
-const socket = io();
-    let logicalClock = Date.now();
-    const offset = Math.floor(Math.random() * 1000) - 500; // Genera un desfase aleatorio
+require('dotenv').config();
+const express = require('express');
+const http = require('http');
+const socketIo = require('socket.io-client');
 
-    // Función para incrementar el reloj lógico y actualizar en pantalla
-    function updateLogicalClock() {
-      logicalClock += 1000 + offset;
-      document.getElementById('clock').textContent = new Date(logicalClock).toLocaleTimeString();
-      socket.emit('updateTime', { offset }); // Envía el offset al coordinador
-      setTimeout(updateLogicalClock, 1000); // Llama a la función cada segundo
-    }
+const app = express();
+const CLIENT_PORT = process.env.CLIENT_PORT || 4000;
+const COORDINATOR_URL = `http://localhost:${process.env.COORDINATOR_PORT || 3000}`;
+const socket = socketIo(COORDINATOR_URL); 
 
-    // Llama a la función de actualización de reloj lógico al cargar la página
-    updateLogicalClock();
+let logicalClock = Date.now();
+let offset = Math.floor(Math.random() * 1000) - 500;
 
-    // Escuchar ajustes de tiempo del coordinador
-    socket.on('adjustTime', (adjustment) => {
-      logicalClock += adjustment;
-      console.log(`Reloj ajustado por: ${adjustment} ms, nuevo reloj lógico: ${new Date(logicalClock).toLocaleTimeString()}`);
-    });
+app.use(express.static('public'));
 
-    // Recibir y mostrar logs de sincronización en pantalla
-    socket.on('updateLogs', (logs) => {
-      const logsList = document.getElementById('logs');
-      logsList.innerHTML = ''; // Limpia la lista antes de agregar nuevos logs
-      logs.forEach(log => {
-        const li = document.createElement('li');
-        li.textContent = log;
-        logsList.appendChild(li);
-      });
-    });
+function updateLogicalClock() {
+  logicalClock += 1000 + offset;
+  socket.emit('updateTime', { offset });
+  setTimeout(updateLogicalClock, 1000);
+}
+
+socket.on('adjustTime', (adjustment) => {
+  offset += adjustment;
+  console.log(`Reloj ajustado por: ${adjustment} ms, nuevo offset: ${offset}`);
+});
+
+updateLogicalClock();
+
+app.listen(CLIENT_PORT, () => {
+  console.log(`Cliente ejecutándose en el puerto ${CLIENT_PORT}`);
+});

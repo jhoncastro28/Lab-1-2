@@ -1,4 +1,4 @@
-require('dotenv').config()
+require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -8,16 +8,20 @@ const Docker = require('dockerode');
 const app = express();
 const server = http.createServer(app);
 const io = socketIo(server);
-const docker = new Docker(); // Inicializa Docker para crear contenedores
+const docker = new Docker();
 
-let clients = {};
-let logs = [];
+const TIME_API_URL = process.env.TIME_API_URL;
+const COORDINATOR_PORT = process.env.COORDINATOR_PORT || 3000;
+const DOCKER_IMAGE = process.env.DOCKER_IMAGE;
+
+let clients = {}; // Guardar datos de cada cliente conectado
+let logs = []; // Guardar los logs de eventos
 
 app.use(express.static('public'));
 
+// Manejo de la conexión de clientes
 io.on('connection', (socket) => {
   console.log(`Nuevo cliente conectado: ${socket.id}`);
-
   clients[socket.id] = { id: socket.id, offset: 0 };
   logEvent(`Cliente conectado: ${socket.id}`);
 
@@ -38,14 +42,15 @@ io.on('connection', (socket) => {
   });
 });
 
+// Sincronizar el tiempo
 async function syncTime() {
-  let attempts = 0;
   const maxAttempts = 3;
+  let attempts = 0;
 
   while (attempts < maxAttempts) {
     try {
-      const { data } = await axios.get(process.env.TIME_API_URL, { timeout: 5000 });
-      const externalTime = new Date(data.dateTime).getTime(); // timeapi.io utiliza 'dateTime'
+      const { data } = await axios.get(TIME_API_URL, { timeout: 5000 });
+      const externalTime = new Date(data.dateTime).getTime();
 
       let offsets = [];
       for (const clientId in clients) {
@@ -59,7 +64,7 @@ async function syncTime() {
         io.to(clientId).emit('adjustTime', adjustment);
         logEvent(`Ajuste enviado al cliente ${clientId}: ${adjustment}`);
       }
-      return; // Éxito, salir de la función
+      return;
     } catch (error) {
       attempts++;
       if (attempts >= maxAttempts) {
@@ -76,10 +81,11 @@ app.get('/sync', (req, res) => {
   res.send('Sincronización ejecutada');
 });
 
+// Crear contenedor de cliente
 app.get('/create-client', async (req, res) => {
   try {
     const container = await docker.createContainer({
-      Image: 'cliente-berkeley',
+      Image: DOCKER_IMAGE,
       ExposedPorts: { '4000/tcp': {} },
       HostConfig: {
         PortBindings: { '4000/tcp': [{ HostPort: '0' }] } // Asignación de puerto dinámica
@@ -87,12 +93,11 @@ app.get('/create-client', async (req, res) => {
     });
     await container.start();
 
-    // Obtener el puerto asignado dinámicamente
     const containerInfo = await container.inspect();
     const hostPort = containerInfo.NetworkSettings.Ports['4000/tcp'][0].HostPort;
 
     logEvent(`Nueva instancia de cliente creada: ${container.id} en el puerto ${hostPort}`);
-    io.emit('updateLogs', logs); // Actualización en tiempo real
+    io.emit('updateLogs', logs);
 
     res.send(`Cliente creado con ID: ${container.id} en el puerto ${hostPort}`);
   } catch (error) {
@@ -103,13 +108,12 @@ app.get('/create-client', async (req, res) => {
   }
 });
 
-
 function logEvent(message) {
   const timestamp = new Date().toLocaleTimeString();
   logs.push(`[${timestamp}] ${message}`);
   io.emit('updateLogs', logs);
 }
 
-server.listen(3000, () => {
-  console.log('Coordinador ejecutándose en el puerto 3000');
+server.listen(COORDINATOR_PORT, () => {
+  console.log(`Coordinador ejecutándose en el puerto ${COORDINATOR_PORT}`);
 });
