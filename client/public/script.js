@@ -1,20 +1,4 @@
-<!DOCTYPE html>
-<html lang="en">
-
-<head>
-  <meta charset="UTF-8">
-  <title>Cliente</title>
-  <script src="/socket.io/socket.io.js"></script>
-</head>
-
-<body>
-  <h1>Cliente</h1>
-  <h2>Reloj Lógico: <span id="clock"></span></h2>
-  <h2>Logs</h2>
-  <ul id="logs"></ul>
-
-  <script>
-    const socket = io();
+const socket = io();
     let logicalClock = Date.now();
     const offset = Math.floor(Math.random() * 1000) - 500; // Genera un desfase aleatorio
 
@@ -45,7 +29,3 @@
         logsList.appendChild(li);
       });
     });
-  </script>
-</body>
-
-</html>

@@ -9,7 +9,7 @@ const socket = socketIo('http://localhost:3000'); // Conectar al coordinador
 let logicalClock = Date.now();
 let offset = Math.floor(Math.random() * 1000) - 500;
 
-app.use(express.static('.'));
+app.use(express.static('public'));
 
 // Incrementa el reloj lógico y envía el tiempo al coordinador
 function updateLogicalClock() {

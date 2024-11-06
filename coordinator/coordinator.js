@@ -1,3 +1,4 @@
+require('dotenv').config()
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io');
@@ -38,24 +39,35 @@ io.on('connection', (socket) => {
 });
 
 async function syncTime() {
-  try {
-    const { data } = await axios.get(process.env.TIME_API_URL); // Asegúrate de tener TIME_API_URL en tu .env
-    const externalTime = new Date(data.datetime).getTime();
+  let attempts = 0;
+  const maxAttempts = 3;
 
-    let offsets = [];
-    for (const clientId in clients) {
-      offsets.push(clients[clientId].offset);
+  while (attempts < maxAttempts) {
+    try {
+      const { data } = await axios.get(process.env.TIME_API_URL, { timeout: 5000 });
+      const externalTime = new Date(data.dateTime).getTime(); // timeapi.io utiliza 'dateTime'
+
+      let offsets = [];
+      for (const clientId in clients) {
+        offsets.push(clients[clientId].offset);
+      }
+
+      const averageOffset = offsets.reduce((acc, cur) => acc + cur, externalTime) / (offsets.length + 1);
+
+      for (const clientId in clients) {
+        const adjustment = averageOffset - clients[clientId].offset;
+        io.to(clientId).emit('adjustTime', adjustment);
+        logEvent(`Ajuste enviado al cliente ${clientId}: ${adjustment}`);
+      }
+      return; // Éxito, salir de la función
+    } catch (error) {
+      attempts++;
+      if (attempts >= maxAttempts) {
+        logEvent(`Error al obtener la hora externa después de ${attempts} intentos: ${error.message}`);
+      } else {
+        logEvent(`Intento ${attempts} fallido. Reintentando...`);
+      }
     }
-
-    const averageOffset = offsets.reduce((acc, cur) => acc + cur, externalTime) / (offsets.length + 1);
-
-    for (const clientId in clients) {
-      const adjustment = averageOffset - clients[clientId].offset;
-      io.to(clientId).emit('adjustTime', adjustment);
-      logEvent(`Ajuste enviado al cliente ${clientId}: ${adjustment}`);
-    }
-  } catch (error) {
-    logEvent(`Error al obtener la hora externa: ${error.message}`);
   }
 }
 
@@ -70,14 +82,19 @@ app.get('/create-client', async (req, res) => {
       Image: 'cliente-berkeley',
       ExposedPorts: { '4000/tcp': {} },
       HostConfig: {
-        PortBindings: { '4000/tcp': [{ HostPort: '' }] } // Asignación de puerto dinámica
+        PortBindings: { '4000/tcp': [{ HostPort: '0' }] } // Asignación de puerto dinámica
       }
     });
     await container.start();
 
-    logEvent(`Nueva instancia de cliente creada: ${container.id}`);
+    // Obtener el puerto asignado dinámicamente
+    const containerInfo = await container.inspect();
+    const hostPort = containerInfo.NetworkSettings.Ports['4000/tcp'][0].HostPort;
+
+    logEvent(`Nueva instancia de cliente creada: ${container.id} en el puerto ${hostPort}`);
     io.emit('updateLogs', logs); // Actualización en tiempo real
-    res.send(`Cliente creado con ID: ${container.id}`);
+
+    res.send(`Cliente creado con ID: ${container.id} en el puerto ${hostPort}`);
   } catch (error) {
     console.error('Error al crear el cliente:', error);
     logEvent(`Error al crear el cliente: ${error.message}`);
@@ -85,6 +102,7 @@ app.get('/create-client', async (req, res) => {
     res.status(500).send('Error al crear el cliente');
   }
 });
+
 
 function logEvent(message) {
   const timestamp = new Date().toLocaleTimeString();
