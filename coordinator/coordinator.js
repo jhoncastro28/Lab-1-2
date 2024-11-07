@@ -6,6 +6,9 @@ const axios = require('axios');
 const Docker = require('dockerode');
 const cors = require('cors'); // Importa el paquete cors
 
+const { Client } = require('ssh2');
+const usedPorts = []; // Para evitar puertos duplicados
+
 const app = express();
 app.use(cors()); // Habilita CORS para todos los orígenes
 
@@ -114,6 +117,52 @@ function logEvent(message) {
   logs.push(`[${timestamp}] ${message}`);
   io.emit('updateLogs', logs);
 }
+
+function getRandomPort(min, max, usedPorts) {
+  let port;
+  do {
+    port = Math.floor(Math.random() * (max - min + 1)) + min;
+  } while (usedPorts.includes(port));
+  return port;
+}
+
+app.post('/launch', (req, res) => {
+  const { SSH_HOST, SSH_USER, SSH_PASSWORD } = process.env;
+  const connection = new Client();
+
+  connection.on('ready', () => {
+    console.log("Cliente SSH conectado");
+    const randomPort = getRandomPort(5000, 6000, usedPorts);
+    const dockerCommand = `sudo docker run -d -p ${randomPort}:${randomPort} --name client_${randomPort} -e PORT=${randomPort} imagen`;
+
+    connection.exec(dockerCommand, (err, stream) => {
+      if (err) {
+        console.error(`Error ejecutando el comando Docker: ${err.message}`);
+        connection.end();
+        return res.status(500).send('Error ejecutando el comando Docker');
+      }
+
+      stream.on('close', (code, signal) => {
+        console.log(`Instancia lanzada en puerto: ${randomPort}`);
+        usedPorts.push(randomPort);
+        connection.end();
+        res.status(200).send(`Instancia lanzada en puerto: ${randomPort}`);
+      }).on('data', (data) => {
+        console.log(`STDOUT: ${data}`);
+      }).stderr.on('data', (data) => {
+        console.error(`STDERR: ${data}`);
+      });
+    });
+  }).on('error', (err) => {
+    console.error(`Error de conexión: ${err.message}`);
+    res.status(500).send('Error de conexión SSH');
+  }).connect({
+    host: SSH_HOST,
+    port: 22,
+    username: SSH_USER,
+    password: SSH_PASSWORD,
+  });
+});
 
 // Iniciar servidor del coordinador
 server.listen(COORDINATOR_PORT, () => {
