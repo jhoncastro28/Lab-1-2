@@ -109,11 +109,39 @@ app.get('/create-client', async (req, res) => {
   }
 });
 
-function logEvent(message) {
+function logEvent(eventTitle, message) {
   const timestamp = new Date().toLocaleTimeString();
-  logs.push(`[${timestamp}] ${message}`);
-  io.emit('updateLogs', logs);
+  logs.push({ time: timestamp, event: eventTitle, detail: message });
+  io.emit('updateLogs', logs); // Envía los logs actualizados a los clientes
 }
+
+// Llama a logEvent dentro del evento 'connection'
+io.on('connection', (socket) => {
+  console.log(`Nuevo cliente conectado: ${socket.id}`);
+  clients[socket.id] = { id: socket.id, offset: 0 };
+  
+  // Pasa los detalles como parámetros
+  logEvent("Conexión de cliente", `Cliente conectado: ${socket.id}`);
+  
+  io.emit('updateClients', clients);
+  io.emit('updateLogs', logs);
+
+  // Escuchar tiempos de los clientes
+  socket.on('updateTime', (data) => {
+    clients[socket.id].offset = data.offset;
+    logEvent("Actualización de tiempo", `Cliente ${socket.id} envió su tiempo con offset: ${data.offset}`);
+    io.emit('updateLogs', logs);
+  });
+
+  // Cuando un cliente se desconecta
+  socket.on('disconnect', () => {
+    logEvent("Desconexión de cliente", `Cliente desconectado: ${socket.id}`);
+    delete clients[socket.id];
+    io.emit('updateClients', clients);
+    io.emit('updateLogs', logs);
+  });
+});
+
 
 // Iniciar servidor del coordinador
 server.listen(COORDINATOR_PORT, () => {

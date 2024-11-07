@@ -12,15 +12,36 @@ socket.on('updateClients', (clients) => {
 });
 
 // Actualizar logs en la interfaz
+socket.on('connect', () => {
+  console.log("Conectado al servidor");
+});
+
 socket.on('updateLogs', (logs) => {
+  console.log("Evento updateLogs recibido", logs); // Verifica que los logs llegan al cliente
   const logsList = document.getElementById('logs');
+
+  // Limpia la tabla antes de actualizar
   logsList.innerHTML = '';
+
   logs.forEach(log => {
-    const li = document.createElement('li');
-    li.textContent = log;
-    logsList.appendChild(li);
+    const row = document.createElement('tr');
+
+    const timeCell = document.createElement('td');
+    timeCell.textContent = log.time;
+    row.appendChild(timeCell);
+
+    const eventCell = document.createElement('td');
+    eventCell.textContent = log.event;
+    row.appendChild(eventCell);
+
+    const detailCell = document.createElement('td');
+    detailCell.textContent = log.detail;
+    row.appendChild(detailCell);
+
+    logsList.appendChild(row);
   });
 });
+
 
 // Crear cliente al hacer clic en el botón
 function createClient() {
