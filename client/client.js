@@ -10,12 +10,15 @@ let socket;
 let logicalClock = Date.now();
 let offset = process.env.INITIAL_OFFSET ? parseInt(process.env.INITIAL_OFFSET) : Math.floor(Math.random() * 1000) - 500;
 
+const coordinatorHost = process.env.COORDINATOR_HOST || 'localhost';
+const coordinatorPort = process.env.COORDINATOR_PORT || '3000';
+
 app.use(express.static('public'));
 
 // Función para conectar manualmente al coordinador
 function connectToCoordinator() {
   if (!socket || socket.disconnected) {
-    socket = socketIo('http://localhost:3000');
+    socket = socketIo(`http://${coordinatorHost}:${coordinatorPort}`);
 
     // Escuchar ajustes del coordinador
     socket.on('adjustTime', (adjustment) => {
