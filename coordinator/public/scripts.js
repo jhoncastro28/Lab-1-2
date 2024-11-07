@@ -1,6 +1,6 @@
 const socket = io();
 
-// Actualizar lista de clientes
+// Actualizar lista de clientes en la interfaz
 socket.on('updateClients', (clients) => {
   const clientsList = document.getElementById('clients');
   clientsList.innerHTML = '';
@@ -33,7 +33,7 @@ function createClient() {
     .catch(error => console.error('Error creando cliente:', error));
 }
 
-// Ejecutar sincronización de tiempo
+// Ejecutar sincronización de tiempo al hacer clic en el botón
 function syncTime() {
   fetch('/sync')
     .then(response => {

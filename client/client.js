@@ -1,35 +1,40 @@
 const express = require('express');
 const http = require('http');
 const socketIo = require('socket.io-client');
+require('dotenv').config();
 
 const app = express();
 const port = 4000;
-let socket; // Inicializa sin conexión
+let socket;
 
 let logicalClock = Date.now();
-let offset = Math.floor(Math.random() * 1000) - 500;
+let offset = process.env.INITIAL_OFFSET ? parseInt(process.env.INITIAL_OFFSET) : Math.floor(Math.random() * 1000) - 500;
 
 app.use(express.static('public'));
 
 // Función para conectar manualmente al coordinador
 function connectToCoordinator() {
-  socket = socketIo('http://localhost:3000'); // Conectar al coordinador manualmente
+  if (!socket || socket.disconnected) {
+    socket = socketIo('http://localhost:3000');
 
-  // Incrementa el reloj lógico y envía el tiempo al coordinador
-  function updateLogicalClock() {
-    logicalClock += 1000 + offset;
-    socket.emit('updateTime', { offset });
-    setTimeout(updateLogicalClock, 1000);
+    // Escuchar ajustes del coordinador
+    socket.on('adjustTime', (adjustment) => {
+      offset += adjustment;
+      console.log(`Reloj ajustado por: ${adjustment} ms, nuevo offset: ${offset}`);
+    });
+
+    console.log('Conectado al coordinador');
+
+    // Inicia el reloj lógico
+    updateLogicalClock();
   }
+}
 
-  // Escuchar ajustes del coordinador
-  socket.on('adjustTime', (adjustment) => {
-    offset += adjustment;
-    console.log(`Reloj ajustado por: ${adjustment} ms, nuevo offset: ${offset}`);
-  });
-
-  // Iniciar el reloj lógico
-  updateLogicalClock();
+// Incrementa el reloj lógico y envía el offset al coordinador
+function updateLogicalClock() {
+  logicalClock += 1000;
+  socket.emit('updateTime', { offset }); // Envía el offset correctamente
+  setTimeout(updateLogicalClock, 1000); // Llama de nuevo en un segundo
 }
 
 // Ruta para conectar manualmente
