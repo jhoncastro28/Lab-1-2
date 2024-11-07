@@ -20,8 +20,10 @@ function connectToCoordinator() {
     // Escuchar ajustes del coordinador
     socket.on('adjustTime', (adjustment) => {
       offset += adjustment;
+      logicalClock = Date.now() + offset; // Actualiza el reloj lógico tras el ajuste
       const logMessage = `Reloj ajustado por: ${adjustment} ms, nuevo offset: ${offset}`;
       addLogMessage(logMessage);
+      updateLogicalClockDisplay(); // Muestra el cambio actualizado del reloj lógico
     });
 
     // Inicia el reloj lógico después de conectarse
@@ -34,7 +36,7 @@ function connectToCoordinator() {
 // Función para actualizar el reloj lógico y enviar el offset cuando cambia significativamente
 function updateLogicalClock() {
   logicalClock += 1000; // Incrementa en 1 segundo (1000 ms)
-  document.getElementById('clock').textContent = new Date(logicalClock).toLocaleTimeString(); // Muestra el tiempo actualizado
+  updateLogicalClockDisplay(); // Muestra el tiempo actualizado
 
   // Solo enviar actualización si hay un cambio significativo
   const threshold = 100; // Umbral de cambio para enviar el offset
@@ -43,7 +45,12 @@ function updateLogicalClock() {
     previousOffset = offset; // Actualiza el valor del offset previo
   }
 
-  setTimeout(updateLogicalClock, 5000); // Llama de nuevo en 5 segundos (puedes ajustar este valor)
+  setTimeout(updateLogicalClock, 1000); // Llama de nuevo en 1 segundo (puedes ajustar este valor)
+}
+
+// Función para actualizar la visualización del reloj lógico
+function updateLogicalClockDisplay() {
+  document.getElementById('clock').textContent = new Date(logicalClock).toLocaleTimeString();
 }
 
 // Exportar la función al ámbito global para que el botón pueda accederla
